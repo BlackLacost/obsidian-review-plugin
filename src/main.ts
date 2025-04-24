@@ -143,9 +143,8 @@ export default class ReviewPlugin extends Plugin {
 				} catch (e) {
 					if (e instanceof Error) {
 						el.innerHTML = `<strong style="color: red;">${e.message}</strong>`;
-					} else {
-						console.log(e);
 					}
+					console.log(e);
 				}
 			}
 		);
@@ -186,7 +185,7 @@ export default class ReviewPlugin extends Plugin {
 		}
 	) {
 		const tableUi = table ? this.tableUi(table) : "";
-		const listUi = list ? this.listUi(list) : "";
+		const listUi = list && list.data.length > 0 ? this.listUi(list) : "";
 		el.innerHTML = `
 					<h2>Week Review №${currentWeekNumber}</h2>
 

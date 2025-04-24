@@ -103,9 +103,31 @@ export class Review {
 			return prev;
 		}, {} as Record<string, unknown[]>);
 
+		const generateProperties = properties.filter(
+			(property) => !!property.generate && property.generate.length === 2
+		);
+
+		generateProperties.forEach((genProperty) => {
+			const [property1, property2] = genProperty.generate as [
+				string,
+				string
+			];
+			for (let i = 0; i < data[property1].length; i++) {
+				const arg1 = data[property1][i] as number;
+				const arg2 =
+					fromHhMmSsToSeconds(data[property2][i] as string) / 3600;
+				const result = arg1 / arg2;
+				data[genProperty.name][i] = isNaN(result)
+					? ""
+					: result.toFixed(2);
+			}
+		});
+
 		const hasAggregation = properties.some(
 			(property) => !!property.aggregation
 		);
+
+		console.log({ data });
 
 		if (!hasAggregation) {
 			return {
@@ -135,6 +157,24 @@ export class Review {
 				return;
 			}
 		});
+
+		generateProperties.forEach((genProperty) => {
+			const [property1, property2] = genProperty.generate as [
+				string,
+				string
+			];
+
+			const dataLength = data[property1].length;
+			const lastArg1 = data[property1][dataLength - 1] as number;
+			const lastArg2 =
+				fromHhMmSsToSeconds(data[property2][dataLength - 1] as string) /
+				3600;
+			const result = lastArg1 / lastArg2;
+			data[genProperty.name][dataLength - 1] = isNaN(result)
+				? ""
+				: result.toFixed(2);
+		});
+
 		headers.push("Итого");
 		console.log({ data });
 		return {
@@ -143,16 +183,25 @@ export class Review {
 		};
 	}
 
+	private isTime(item: unknown): item is string {
+		if (typeof item !== "string") return false;
+		return !!item.match(/(\d+):(\d\d):(\d\d)/);
+	}
+
+	private isNumber(item: unknown): item is number {
+		return typeof item === "number";
+	}
+
+	private isBoolean(item: unknown): item is boolean {
+		return typeof item === "boolean";
+	}
+
 	private isArrayTime(arr: unknown[]): arr is string[] {
-		if (!arr.every((item) => typeof item === "string")) return false;
-		const pattern = /(\d+):(\d\d):(\d\d)/;
-		return arr.every((item) => !!item.match(pattern));
+		return arr.every((item) => this.isTime(item));
 	}
 
 	private isArrayNumber(arr: unknown[]): arr is number[] {
-		return arr.every(
-			(item) => typeof item === "number" || typeof item === "boolean"
-		);
+		return arr.every((item) => this.isNumber(item) || this.isBoolean(item));
 	}
 
 	private areAllFilesDailyNotes(files: TFile[]): boolean {
@@ -212,7 +261,7 @@ function fromSecondsToHhMmSs(allSeconds: number): string {
 
 function fromHhMmSsToSeconds(time: string): number {
 	if (!time) return 0;
-	const parsedHoursMinutesSeconds = time.match(/(\d\d):(\d\d):(\d\d)/);
+	const parsedHoursMinutesSeconds = time.match(/(\d+):(\d\d):(\d\d)/);
 	if (!parsedHoursMinutesSeconds) return 0;
 	// eslint-disable-next-line @typescript-eslint/no-unused-vars
 	const [_, hours, minutes, seconds] = parsedHoursMinutesSeconds;
