@@ -1,6 +1,6 @@
 import { parse } from "yaml";
 import { AggregationType } from "./aggregation";
-import { RenderCodeError } from "./error";
+import { YamlParserError } from "./error";
 
 export interface Property {
 	name: string;
@@ -9,7 +9,8 @@ export interface Property {
 }
 
 export interface YamlData {
-	properties: Property[];
+	table?: Property[];
+	list?: Property["name"];
 }
 
 export class YamlParser {
@@ -27,26 +28,31 @@ export class YamlParser {
 
 		const isValid = isValidName && isValidAggregation && isValidGenerate;
 		if (!isValid) {
-			throw new RenderCodeError("Invalid properties");
+			throw new YamlParserError("Invalid properties");
 		}
 		return isValid;
 	}
 
 	private validateYamlData(data: any): data is YamlData {
 		if (data === null) {
-			throw new RenderCodeError("Add code");
+			throw new YamlParserError("Add code");
 		}
 
 		if (typeof data !== "object") {
-			throw new RenderCodeError("Code should be yaml");
+			throw new YamlParserError("Code should be yaml");
 		}
 
-		if (!Array.isArray(data.properties)) {
-			throw new RenderCodeError("Properties should be array");
+		if (typeof data.table !== "undefined" && !Array.isArray(data.table)) {
+			throw new YamlParserError("Table properties should be array");
 		}
-		return data.properties.every((prop: any) =>
-			this.validateProperty(prop)
-		);
+
+		if (typeof data.list !== "undefined" && typeof data.list !== "string") {
+			throw new YamlParserError("List property should be string");
+		}
+		if (typeof data.table !== "undefined") {
+			return data.table.every((prop: any) => this.validateProperty(prop));
+		}
+		return true;
 	}
 
 	parse(source: string) {

@@ -2,7 +2,7 @@ import { TFile } from "obsidian";
 import { Aggregation } from "./aggregation";
 import { ReviewError } from "./error";
 import { DayData } from "./main";
-import { YamlData } from "./yamlParser";
+import { Property, YamlData } from "./yamlParser";
 
 const weekDays: Record<number, string> = {
 	0: "Вс",
@@ -39,11 +39,7 @@ export class Review {
 		this.activeFile = activeFile;
 	}
 
-	week(): {
-		currentWeekNumber: number;
-		headers: string[];
-		data: Record<string, any[]>;
-	} {
+	week() {
 		const { weekNumber: currentWeekNumber } = this.getDayDataFromFile(
 			this.activeFile
 		);
@@ -57,15 +53,47 @@ export class Review {
 				return curr.weekDay - next.weekDay;
 			});
 
-		console.log({ weekDaysData });
+		const table = this.yamlData.table
+			? this.createTableData(weekDaysData, this.yamlData.table)
+			: undefined;
+		const list = this.yamlData.list
+			? this.createListData(weekDaysData, this.yamlData.list)
+			: undefined;
+		return {
+			currentWeekNumber,
+			table,
+			list,
+		};
+	}
 
+	private createListData(
+		weekDaysData: DayData[],
+		property: Property["name"]
+	) {
+		const data = weekDaysData
+			.flatMap((dayData) => dayData.properties[property])
+			.filter((item) => !!item)
+			.filter((item) => typeof item === "string");
+		return {
+			header: property,
+			data,
+		};
+	}
+
+	private createTableData(
+		weekDaysData: DayData[],
+		properties: Property[]
+	): {
+		headers: string[];
+		data: Record<string, any[]>;
+	} {
 		const headers = [
 			"Параметры",
 			...weekDaysData.map((item) => weekDays[item.weekDay]),
 		];
 
 		const data = weekDaysData.reduce((prev, dayData) => {
-			this.yamlData.properties.forEach((property) => {
+			properties.forEach((property) => {
 				if (prev[property.name]) {
 					prev[property.name].push(dayData.properties[property.name]);
 				} else {
@@ -75,21 +103,18 @@ export class Review {
 			return prev;
 		}, {} as Record<string, unknown[]>);
 
-		console.log({ data });
-
-		const hasAggregation = this.yamlData.properties.some(
+		const hasAggregation = properties.some(
 			(property) => !!property.aggregation
 		);
 
 		if (!hasAggregation) {
 			return {
-				currentWeekNumber,
 				headers,
 				data,
 			};
 		}
 
-		this.yamlData.properties.forEach((property) => {
+		properties.forEach((property) => {
 			const arrayWithoutEmpty = data[property.name].filter(
 				(item) => !!item
 			);
@@ -113,7 +138,6 @@ export class Review {
 		headers.push("Итого");
 		console.log({ data });
 		return {
-			currentWeekNumber,
 			headers,
 			data,
 		};

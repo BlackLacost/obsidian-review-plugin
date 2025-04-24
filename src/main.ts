@@ -170,17 +170,37 @@ export default class ReviewPlugin extends Plugin {
 	private renderHTML(
 		el: HTMLElement,
 		{
-			headers,
-			data,
 			currentWeekNumber,
+			table,
+			list,
 		}: {
 			currentWeekNumber: number;
-			headers: string[];
-			data: Record<string, any[]>;
+			table?: {
+				headers: string[];
+				data: Record<string, any[]>;
+			};
+			list?: {
+				header: string;
+				data: string[];
+			};
 		}
 	) {
-		const ths = headers.map((header: any) => `<th>${header}</th>`).join("");
-		const trs = Object.entries(data)
+		const tableUi = table ? this.tableUi(table) : "";
+		const listUi = list ? this.listUi(list) : "";
+		el.innerHTML = `
+					<h2>Week Review №${currentWeekNumber}</h2>
+
+					${tableUi}
+
+					${listUi}
+					`;
+	}
+
+	private tableUi(table: { headers: string[]; data: Record<string, any[]> }) {
+		const ths = table.headers
+			.map((header: any) => `<th>${header}</th>`)
+			.join("");
+		const trs = Object.entries(table.data)
 			.map(
 				([key, arr]: [string, any[]]) => `
 				<tr>
@@ -189,17 +209,26 @@ export default class ReviewPlugin extends Plugin {
 				</tr>`
 			)
 			.join("");
-		el.innerHTML = `
-					<h2>Week Review №${currentWeekNumber}</h2>
-					<table>
-						<thead>
-							<tr>${ths}</tr>
-						<thead>
-						<tbody>
-							${trs}
-						</tbody>
-					</table
-					`;
+
+		return `
+			<table>
+				<thead>
+					<tr>${ths}</tr>
+				<thead>
+				<tbody>
+					${trs}
+				</tbody>
+			</table
+			`;
+	}
+
+	private listUi(list: { header: string; data: string[] }) {
+		const liList = list.data.map((item) => `<li>${item}</li>`).join("");
+		return `<h3>${list.header}</h3>
+		<ul>
+			${liList}
+		</ul>
+		`;
 	}
 
 	private getDailyFilesFromDailyFolder(): TFile[] {
