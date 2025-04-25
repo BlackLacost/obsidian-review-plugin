@@ -8,6 +8,7 @@ import {
 } from "obsidian";
 import { RenderCodeError } from "./error";
 import { Review } from "./review";
+import { Table } from "./table";
 import { YamlParser } from "./yamlParser";
 
 interface ReviewPluginSettings {
@@ -27,11 +28,6 @@ export interface DayData {
 
 const DEFAULT_SETTINGS: ReviewPluginSettings = {
 	dailyFolder: "daily",
-};
-
-export type Table = {
-	headers: (string | number)[];
-	data: Record<string, YamlValue[]>;
 };
 
 export type List = {
@@ -217,7 +213,7 @@ export default class ReviewPlugin extends Plugin {
 			list?: List;
 		}
 	) {
-		const tableUi = table ? this.tableUi(table) : "";
+		const tableUi = table ? table.render() : "";
 		const listUi = list && list.data.length > 0 ? this.listUi(list) : "";
 		el.innerHTML = `
 					<h2>Week Review №${weekDate.getWeek()}</h2>
@@ -240,7 +236,7 @@ export default class ReviewPlugin extends Plugin {
 			list?: List;
 		}
 	) {
-		const tableUi = table ? this.tableUi(table) : "";
+		const tableUi = table ? table.render() : "";
 		const listUi = list && list.data.length > 0 ? this.listUi(list) : "";
 		el.innerHTML = `
 					<h2>Month Review №${monthDate.getMonth() + 1}</h2>
@@ -249,32 +245,6 @@ export default class ReviewPlugin extends Plugin {
 
 					${listUi}
 					`;
-	}
-
-	private tableUi(table: Table) {
-		const ths = table.headers
-			.map((header) => `<th>${header}</th>`)
-			.join("");
-		const trs = Object.entries(table.data)
-			.map(
-				([key, arr]) => `
-				<tr>
-					<td>${key}</td>
-					${arr.map((item) => `<td>${item ?? ""}</td>`).join("")}
-				</tr>`
-			)
-			.join("");
-
-		return `
-			<table>
-				<thead>
-					<tr>${ths}</tr>
-				<thead>
-				<tbody>
-					${trs}
-				</tbody>
-			</table
-			`;
 	}
 
 	private listUi(list: List) {
@@ -307,8 +277,6 @@ export default class ReviewPlugin extends Plugin {
 		const { frontmatter } = metadata;
 		return {
 			date: new Date(file.basename),
-			// weekNumber: new Date(file.basename).getWeek(),
-			// weekDay: new Date(file.basename).getDay(),
 			properties: {
 				...(frontmatter && { ...frontmatter }),
 			},
