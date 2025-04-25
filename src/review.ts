@@ -1,7 +1,9 @@
 import { TFile } from "obsidian";
 import { ReviewError } from "./error";
-import { DayData, List } from "./main";
-import { ITable, Table } from "./table";
+import { List } from "./list";
+import { DayData } from "./main";
+import { Table } from "./table";
+import { Validation } from "./validation";
 import { YamlData } from "./yamlParser";
 
 export class Review {
@@ -12,7 +14,7 @@ export class Review {
 		private readonly yamlData: YamlData,
 		private readonly getDayDataFromFile: (file: TFile) => DayData
 	) {
-		if (!this.areAllFilesDailyNotes(files)) {
+		if (!Validation.areAllFilesDailyNotes(files)) {
 			const errorMessage = "All files should have title like YYYY-MM-DD";
 			throw new ReviewError(errorMessage);
 		}
@@ -42,9 +44,14 @@ export class Review {
 			});
 		}
 
-		const list = this.yamlData.list
-			? this.createListData(weekDaysData, this.yamlData.list)
-			: undefined;
+		let list: List | undefined = undefined;
+		if (weekDaysData.length > 0 && this.yamlData.list) {
+			list = List.createFromDayDataAndProperty(
+				weekDaysData,
+				this.yamlData.list
+			);
+		}
+
 		return {
 			weekDate: targetDate,
 			table,
@@ -62,7 +69,7 @@ export class Review {
 			const { weekDate, table, list } = this.week(reviewDate);
 			return {
 				weekNumber: weekDate.getWeek(),
-				table,
+				weekReviewTable: table,
 				list,
 			};
 		});
@@ -70,6 +77,7 @@ export class Review {
 		let monthTable: Table | undefined = undefined;
 		if (this.yamlData.table) {
 			monthTable = this.createMonthTable(weekReviewData);
+			console.log({ monthTable });
 			monthTable.addAggregationToTable(this.yamlData.table);
 		}
 
@@ -77,69 +85,30 @@ export class Review {
 		const listData = weekReviewData
 			.map((item) => item.list?.data)
 			.flatMap((item) => item)
-			.filter(this.isString);
+			.filter(Validation.isString);
 
 		return {
 			monthDate: targetDate,
 			table: monthTable,
-			list: {
-				header: listHeader,
-				data: listData,
-			},
+			list: new List(listHeader, listData),
 		};
 	}
 
 	private createMonthTable(
-		weekReviewData: { weekNumber: number; table?: ITable }[]
+		weekReviewsTables: { weekNumber: number; weekReviewTable?: Table }[]
 	): Table {
-		const newTable: ITable = { headers: ["Параметры"], data: {} };
-		weekReviewData.forEach(({ weekNumber, table }) => {
-			if (!table) return;
-			if (table?.data) {
-				Object.entries(table.data).forEach(
-					([propertyName, arr], index) => {
-						if (index === 0) {
-							newTable.headers.push(weekNumber);
-						}
-						if (newTable.data[propertyName]) {
-							newTable.data[propertyName].push(
-								arr[arr.length - 1]
-							);
-						} else {
-							newTable.data[propertyName] = [arr[arr.length - 1]];
-						}
-					}
+		const tables = weekReviewsTables
+			.map(({ weekNumber, weekReviewTable }) => {
+				if (!weekReviewTable) return;
+				weekReviewTable.headers = [weekNumber];
+				weekReviewTable.sliceColumns(
+					weekReviewTable.headers.length - 2
 				);
-			}
-		});
+				return weekReviewTable;
+			})
+			.filter(Validation.isTable);
 
-		return new Table(newTable.headers, newTable.data);
-	}
-
-	private createListData(
-		weekDaysData: DayData[],
-		propertyName: string
-	): List {
-		const data = weekDaysData
-			.flatMap((dayData) => dayData.properties[propertyName])
-			.filter(this.isString);
-
-		return {
-			header: propertyName,
-			data,
-		};
-	}
-
-	private isString(item: unknown): item is string {
-		return typeof item === "string";
-	}
-
-	private areAllFilesDailyNotes(files: TFile[]): boolean {
-		return files.every((file) => this.isFileDailyNotes(file));
-	}
-
-	private isFileDailyNotes(file: TFile): boolean {
-		return file.basename.match(/^\d\d\d\d-\d\d-\d\d$/) !== null;
+		return Table.mergeTables(tables);
 	}
 
 	private getCurrentWeekFiles(currentDate: Date): TFile[] {

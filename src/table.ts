@@ -1,6 +1,6 @@
-import { TFile } from "obsidian";
 import { Aggregation } from "./aggregation";
 import { DayData, YamlValue } from "./main";
+import { Validation } from "./validation";
 import { Property } from "./yamlParser";
 
 const weekDays: Record<number, string> = {
@@ -50,7 +50,10 @@ export class Table {
 			const arrayWithoutEmpty = this.data[property.name].filter(
 				(item) => !!item
 			);
-			if (this.isArrayNumber(arrayWithoutEmpty)) {
+			if (
+				Validation.isArrayNumber(arrayWithoutEmpty) ||
+				Validation.isArrayBoolean(arrayWithoutEmpty)
+			) {
 				const aggregationValue = this.aggregation.call(
 					arrayWithoutEmpty,
 					property.aggregation
@@ -58,7 +61,7 @@ export class Table {
 				this.data[property.name].push(aggregationValue);
 				return;
 			}
-			if (this.isArrayTime(arrayWithoutEmpty)) {
+			if (Validation.isArrayTime(arrayWithoutEmpty)) {
 				const aggregationValue = this.aggregation.call(
 					arrayWithoutEmpty.map(fromHhMmSsToSeconds),
 					property.aggregation
@@ -72,6 +75,14 @@ export class Table {
 
 		this.addGenerateProperties(properties);
 		this.headers.push("Итого");
+	}
+
+	sliceColumns(start?: number, end?: number): Table {
+		this.headers = this.headers.slice(start, end);
+		Object.entries(this.data).map(([propertyName, propertyValues]) => {
+			this.data[propertyName] = propertyValues.slice(start, end);
+		});
+		return this;
 	}
 
 	render() {
@@ -89,7 +100,7 @@ export class Table {
 			.map(
 				([key, arr]) => `
 				<tr>
-					<td>${key}</td>
+					<th>${key}</th>
 					${arr.map((item) => `<td>${item ?? ""}</td>`).join("")}
 				</tr>`
 			)
@@ -98,7 +109,7 @@ export class Table {
 		return `
 			<table>
 				<thead>
-					<tr>${th}</tr>
+					<tr><th>Параметры</th>${th}</tr>
 				<thead>
 				<tbody>
 					${tr}
@@ -114,7 +125,7 @@ export class Table {
 		cols: DayData[];
 		rows: Property[];
 	}): Table {
-		const headers = ["Параметры", ...cols.map((item) => item.date)];
+		const headers = [...cols.map((item) => item.date)];
 
 		const tableData = cols.reduce((table, col) => {
 			rows.forEach((row) => {
@@ -148,37 +159,23 @@ export class Table {
 		return table;
 	}
 
-	private isTime(item: YamlValue): item is string {
-		if (typeof item !== "string") return false;
-		return !!item.match(/(\d+):(\d\d):(\d\d)/);
-	}
-
-	private isNumber(item: YamlValue): item is number {
-		return typeof item === "number";
-	}
-
-	private isBoolean(item: YamlValue): item is boolean {
-		return typeof item === "boolean";
-	}
-
-	private isString(item: unknown): item is string {
-		return typeof item === "string";
-	}
-
-	private isArrayTime(arr: YamlValue[]): arr is string[] {
-		return arr.every((item) => this.isTime(item));
-	}
-
-	private isArrayNumber(arr: YamlValue[]): arr is number[] {
-		return arr.every((item) => this.isNumber(item) || this.isBoolean(item));
-	}
-
-	private areAllFilesDailyNotes(files: TFile[]): boolean {
-		return files.every((file) => this.isFileDailyNotes(file));
-	}
-
-	private isFileDailyNotes(file: TFile): boolean {
-		return file.basename.match(/^\d\d\d\d-\d\d-\d\d$/) !== null;
+	static mergeTables(tables: Table[]): Table {
+		const newTable = new Table([], {});
+		tables.forEach((table) => {
+			table.headers.forEach((header) => {
+				newTable.headers
+					? newTable.headers.push(header)
+					: (newTable.headers = [header]);
+			});
+			Object.entries(table.data).forEach(([propertyName, arr]) => {
+				arr.forEach((item) => {
+					newTable.data[propertyName]
+						? newTable.data[propertyName].push(item)
+						: (newTable.data[propertyName] = [item]);
+				});
+			});
+		});
+		return newTable;
 	}
 }
 

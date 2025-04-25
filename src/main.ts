@@ -7,6 +7,7 @@ import {
 	TFile,
 } from "obsidian";
 import { RenderCodeError } from "./error";
+import { List } from "./list";
 import { Review } from "./review";
 import { Table } from "./table";
 import { YamlParser } from "./yamlParser";
@@ -28,11 +29,6 @@ export interface DayData {
 
 const DEFAULT_SETTINGS: ReviewPluginSettings = {
 	dailyFolder: "daily",
-};
-
-export type List = {
-	header: string;
-	data: string[];
 };
 
 export default class ReviewPlugin extends Plugin {
@@ -142,15 +138,15 @@ export default class ReviewPlugin extends Plugin {
 			"week-review",
 			async (source, el, ctx) => {
 				try {
-					const currentDayData = this.getDayDataFromFile(
-						this.getActiveFile()
-					);
 					const review = new Review(
 						this.getDailyFilesFromDailyFolder(),
 						this.yaml.parse(source),
 						this.getDayDataFromFile.bind(this)
 					);
 
+					const currentDayData = this.getDayDataFromFile(
+						this.getActiveFile()
+					);
 					this.renderWeekHTML(el, review.week(currentDayData.date));
 				} catch (e) {
 					if (e instanceof Error) {
@@ -214,7 +210,7 @@ export default class ReviewPlugin extends Plugin {
 		}
 	) {
 		const tableUi = table ? table.render() : "";
-		const listUi = list && list.data.length > 0 ? this.listUi(list) : "";
+		const listUi = list && list.data.length > 0 ? list.render() : "";
 		el.innerHTML = `
 					<h2>Week Review №${weekDate.getWeek()}</h2>
 
@@ -237,7 +233,7 @@ export default class ReviewPlugin extends Plugin {
 		}
 	) {
 		const tableUi = table ? table.render() : "";
-		const listUi = list && list.data.length > 0 ? this.listUi(list) : "";
+		const listUi = list && list.data.length > 0 ? list.render() : "";
 		el.innerHTML = `
 					<h2>Month Review №${monthDate.getMonth() + 1}</h2>
 
@@ -245,15 +241,6 @@ export default class ReviewPlugin extends Plugin {
 
 					${listUi}
 					`;
-	}
-
-	private listUi(list: List) {
-		const liList = list.data.map((item) => `<li>${item}</li>`).join("");
-		return `<h3>${list.header}</h3>
-		<ul>
-			${liList}
-		</ul>
-		`;
 	}
 
 	private getDailyFilesFromDailyFolder(): TFile[] {
