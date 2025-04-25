@@ -14,15 +14,29 @@ interface ReviewPluginSettings {
 	dailyFolder: string;
 }
 
+type YamlScalar = string | number | boolean | null;
+type YamlArray = YamlValue[];
+type YamlObject = { [key: string]: YamlValue };
+
+export type YamlValue = YamlScalar | YamlArray | YamlObject;
+
 export interface DayData {
-	date: string;
-	weekNumber: number;
-	weekDay: number;
-	properties: Record<string, unknown>;
+	date: Date;
+	properties: Record<string, YamlValue>;
 }
 
 const DEFAULT_SETTINGS: ReviewPluginSettings = {
 	dailyFolder: "daily",
+};
+
+export type Table = {
+	headers: (string | number)[];
+	data: Record<string, YamlValue[]>;
+};
+
+export type List = {
+	header: string;
+	data: string[];
 };
 
 export default class ReviewPlugin extends Plugin {
@@ -129,17 +143,42 @@ export default class ReviewPlugin extends Plugin {
 		// );
 
 		this.registerMarkdownCodeBlockProcessor(
-			"review",
+			"week-review",
 			async (source, el, ctx) => {
 				try {
+					const currentDayData = this.getDayDataFromFile(
+						this.getActiveFile()
+					);
 					const review = new Review(
 						this.getDailyFilesFromDailyFolder(),
-						this.getActiveFile(),
 						this.yaml.parse(source),
 						this.getDayDataFromFile.bind(this)
 					);
 
-					this.renderHTML(el, review.week());
+					this.renderWeekHTML(el, review.week(currentDayData.date));
+				} catch (e) {
+					if (e instanceof Error) {
+						el.innerHTML = `<strong style="color: red;">${e.message}</strong>`;
+					}
+					console.log(e);
+				}
+			}
+		);
+
+		this.registerMarkdownCodeBlockProcessor(
+			"month-review",
+			async (source, el, ctx) => {
+				try {
+					const currentDayData = this.getDayDataFromFile(
+						this.getActiveFile()
+					);
+					const review = new Review(
+						this.getDailyFilesFromDailyFolder(),
+						this.yaml.parse(source),
+						this.getDayDataFromFile.bind(this)
+					);
+
+					this.renderMonthHTML(el, review.month(currentDayData.date));
 				} catch (e) {
 					if (e instanceof Error) {
 						el.innerHTML = `<strong style="color: red;">${e.message}</strong>`;
@@ -166,28 +205,22 @@ export default class ReviewPlugin extends Plugin {
 		await this.saveData(this.settings);
 	}
 
-	private renderHTML(
+	private renderWeekHTML(
 		el: HTMLElement,
 		{
-			currentWeekNumber,
+			weekDate,
 			table,
 			list,
 		}: {
-			currentWeekNumber: number;
-			table?: {
-				headers: string[];
-				data: Record<string, any[]>;
-			};
-			list?: {
-				header: string;
-				data: string[];
-			};
+			weekDate: Date;
+			table?: Table;
+			list?: List;
 		}
 	) {
 		const tableUi = table ? this.tableUi(table) : "";
 		const listUi = list && list.data.length > 0 ? this.listUi(list) : "";
 		el.innerHTML = `
-					<h2>Week Review №${currentWeekNumber}</h2>
+					<h2>Week Review №${weekDate.getWeek()}</h2>
 
 					${tableUi}
 
@@ -195,13 +228,36 @@ export default class ReviewPlugin extends Plugin {
 					`;
 	}
 
-	private tableUi(table: { headers: string[]; data: Record<string, any[]> }) {
+	private renderMonthHTML(
+		el: HTMLElement,
+		{
+			monthDate,
+			table,
+			list,
+		}: {
+			monthDate: Date;
+			table?: Table;
+			list?: List;
+		}
+	) {
+		const tableUi = table ? this.tableUi(table) : "";
+		const listUi = list && list.data.length > 0 ? this.listUi(list) : "";
+		el.innerHTML = `
+					<h2>Month Review №${monthDate.getMonth() + 1}</h2>
+
+					${tableUi}
+
+					${listUi}
+					`;
+	}
+
+	private tableUi(table: Table) {
 		const ths = table.headers
-			.map((header: any) => `<th>${header}</th>`)
+			.map((header) => `<th>${header}</th>`)
 			.join("");
 		const trs = Object.entries(table.data)
 			.map(
-				([key, arr]: [string, any[]]) => `
+				([key, arr]) => `
 				<tr>
 					<td>${key}</td>
 					${arr.map((item) => `<td>${item ?? ""}</td>`).join("")}
@@ -221,7 +277,7 @@ export default class ReviewPlugin extends Plugin {
 			`;
 	}
 
-	private listUi(list: { header: string; data: string[] }) {
+	private listUi(list: List) {
 		const liList = list.data.map((item) => `<li>${item}</li>`).join("");
 		return `<h3>${list.header}</h3>
 		<ul>
@@ -237,8 +293,12 @@ export default class ReviewPlugin extends Plugin {
 		if (!dailyFolder) return [];
 		const result = dailyFolder.children
 			.map((file) => this.app.vault.getFileByPath(file.path))
-			.filter((file) => !!file);
+			.filter(this.isTFile);
 		return result;
+	}
+
+	private isTFile(item: TFile | null | undefined): item is TFile {
+		return item instanceof TFile;
 	}
 
 	private getDayDataFromFile(file: TFile): DayData {
@@ -246,9 +306,9 @@ export default class ReviewPlugin extends Plugin {
 		if (!metadata) throw new RenderCodeError(`No metadata in ${file}`);
 		const { frontmatter } = metadata;
 		return {
-			date: file.basename,
-			weekNumber: new Date(file.basename).getWeek(),
-			weekDay: new Date(file.basename).getDay(),
+			date: new Date(file.basename),
+			// weekNumber: new Date(file.basename).getWeek(),
+			// weekDay: new Date(file.basename).getDay(),
 			properties: {
 				...(frontmatter && { ...frontmatter }),
 			},
@@ -355,4 +415,26 @@ Date.prototype.getWeek = function () {
 				7
 		)
 	);
+};
+
+Date.prototype.getAllSundaysInMonth = function () {
+	const year = this.getFullYear();
+	const month = this.getMonth();
+
+	const sundays = [];
+	const firstDay = new Date(year, month, 1);
+	let day = 1;
+
+	// Находим первое воскресенье
+	if (firstDay.getDay() !== 0) {
+		day += 7 - firstDay.getDay();
+	}
+
+	// Собираем все воскресенья
+	while (new Date(year, month, day).getMonth() === month) {
+		sundays.push(new Date(year, month, day));
+		day += 7;
+	}
+
+	return sundays;
 };

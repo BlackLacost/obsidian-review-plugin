@@ -1,4 +1,4 @@
-export type AggregationType = "min" | "max" | "sum" | "avg";
+import { Aggregation as AggregationType } from "./yamlParser";
 
 export class Aggregation {
 	call(arr: number[], type?: AggregationType) {

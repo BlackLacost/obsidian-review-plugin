@@ -1,7 +1,7 @@
 import { TFile } from "obsidian";
 import { Aggregation } from "./aggregation";
 import { ReviewError } from "./error";
-import { DayData } from "./main";
+import { DayData, List, Table, YamlValue } from "./main";
 import { Property, YamlData } from "./yamlParser";
 
 const weekDays: Record<number, string> = {
@@ -16,12 +16,10 @@ const weekDays: Record<number, string> = {
 
 export class Review {
 	private readonly files: TFile[];
-	private readonly activeFile: TFile;
 	private readonly aggregation = new Aggregation();
 
 	constructor(
 		files: TFile[],
-		activeFile: TFile,
 		private readonly yamlData: YamlData,
 		private readonly getDayDataFromFile: (file: TFile) => DayData
 	) {
@@ -30,69 +28,127 @@ export class Review {
 			throw new ReviewError(errorMessage);
 		}
 		this.files = files;
-
-		if (!this.isFileDailyNotes(activeFile)) {
-			throw new ReviewError(
-				"Active file should have title like YYYY-MM-DD"
-			);
-		}
-		this.activeFile = activeFile;
 	}
 
-	week() {
-		const { weekNumber: currentWeekNumber } = this.getDayDataFromFile(
-			this.activeFile
-		);
-		const weekFiles = this.getCurrentWeekFiles(currentWeekNumber);
+	week(targetDate: Date): {
+		weekDate: Date;
+		table?: Table;
+		list?: List;
+	} {
+		const weekFiles = this.getCurrentWeekFiles(targetDate);
 		const weekDaysData = weekFiles
 			.map((file) => this.getDayDataFromFile(file))
 			// TODO: New Date.prototype.getDay
 			.sort((curr, next) => {
-				if (curr.weekDay === 0) return 1;
-				if (next.weekDay === 0) return -1;
-				return curr.weekDay - next.weekDay;
+				if (curr.date.getWeek() === 0) return 1;
+				if (next.date.getWeek() === 0) return -1;
+				return curr.date.getWeek() - next.date.getWeek();
 			});
 
 		const table = this.yamlData.table
-			? this.createTableData(weekDaysData, this.yamlData.table)
+			? this.createTableDataFromDayData(weekDaysData, this.yamlData.table)
 			: undefined;
 		const list = this.yamlData.list
 			? this.createListData(weekDaysData, this.yamlData.list)
 			: undefined;
 		return {
-			currentWeekNumber,
+			weekDate: targetDate,
 			table,
 			list,
 		};
 	}
 
+	month(targetDate: Date): {
+		monthDate: Date;
+		table?: Table;
+		list?: List;
+	} {
+		const allSundaysInTargetMonth = targetDate.getAllSundaysInMonth();
+		const weekReviewData = allSundaysInTargetMonth.map((reviewDate) => {
+			const { weekDate, table, list } = this.week(new Date(reviewDate));
+			return {
+				weekNumber: weekDate.getWeek(),
+				table,
+				list,
+			};
+		});
+
+		let monthTableWithAggregation: Table | undefined = undefined;
+		if (this.yamlData.table) {
+			const monthTable = this.createMonthTable(weekReviewData);
+			monthTableWithAggregation = this.addAggregationToTable(
+				monthTable,
+				this.yamlData.table
+			);
+		}
+
+		const listHeader = weekReviewData[0].list?.header ?? "";
+		const listData = weekReviewData
+			.map((item) => item.list?.data)
+			.flatMap((item) => item)
+			.filter(this.isString);
+
+		return {
+			monthDate: targetDate,
+			table: monthTableWithAggregation,
+			list: {
+				header: listHeader,
+				data: listData,
+			},
+		};
+	}
+
+	private createMonthTable(
+		weekReviewData: { weekNumber: number; table?: Table }[]
+	): Table {
+		const newTable: Table = { headers: ["Параметры"], data: {} };
+		weekReviewData.forEach(({ weekNumber, table }) => {
+			if (!table) return;
+			if (table?.data) {
+				Object.entries(table.data).forEach(
+					([propertyName, arr], index) => {
+						if (index === 0) {
+							newTable.headers.push(weekNumber);
+						}
+						if (newTable.data[propertyName]) {
+							newTable.data[propertyName].push(
+								arr[arr.length - 1]
+							);
+						} else {
+							newTable.data[propertyName] = [arr[arr.length - 1]];
+						}
+					}
+				);
+			}
+		});
+
+		return newTable;
+	}
+
 	private createListData(
 		weekDaysData: DayData[],
-		property: Property["name"]
-	) {
+		propertyName: string
+	): List {
 		const data = weekDaysData
-			.flatMap((dayData) => dayData.properties[property])
-			.filter((item) => !!item)
-			.filter((item) => typeof item === "string");
+			.flatMap((dayData) => dayData.properties[propertyName])
+			.filter(this.isString);
+
 		return {
-			header: property,
+			header: propertyName,
 			data,
 		};
 	}
 
-	private createTableData(
+	private createTableDataFromDayData(
 		weekDaysData: DayData[],
 		properties: Property[]
-	): {
-		headers: string[];
-		data: Record<string, any[]>;
-	} {
+	): Table {
 		const headers = [
 			"Параметры",
-			...weekDaysData.map((item) => weekDays[item.weekDay]),
+			...weekDaysData.map((item) => weekDays[item.date.getDay()]),
 		];
 
-		const data = weekDaysData.reduce((prev, dayData) => {
+		const tableData = weekDaysData.reduce((prev, dayData) => {
 			properties.forEach((property) => {
 				if (prev[property.name]) {
 					prev[property.name].push(dayData.properties[property.name]);
@@ -101,43 +157,66 @@ export class Review {
 				}
 			});
 			return prev;
-		}, {} as Record<string, unknown[]>);
+		}, {} as Table["data"]);
 
-		const generateProperties = properties.filter(
-			(property) => !!property.generate && property.generate.length === 2
+		if (Object.entries(tableData).length === 0) {
+			return {
+				headers: [],
+				data: {},
+			};
+		}
+
+		const tableDataWithGeneratedProperties = this.addGenerateProperties(
+			tableData,
+			properties
 		);
-
-		generateProperties.forEach((genProperty) => {
-			const [property1, property2] = genProperty.generate as [
-				string,
-				string
-			];
-			for (let i = 0; i < data[property1].length; i++) {
-				const arg1 = data[property1][i] as number;
-				const arg2 =
-					fromHhMmSsToSeconds(data[property2][i] as string) / 3600;
-				const result = arg1 / arg2;
-				data[genProperty.name][i] = isNaN(result)
-					? ""
-					: result.toFixed(2);
-			}
-		});
 
 		const hasAggregation = properties.some(
 			(property) => !!property.aggregation
 		);
 
-		console.log({ data });
+		const newTable: Table = {
+			headers,
+			data: tableDataWithGeneratedProperties,
+		};
 
 		if (!hasAggregation) {
-			return {
-				headers,
-				data,
-			};
+			return newTable;
 		}
 
+		return this.addAggregationToTable(newTable, properties);
+	}
+
+	private addGenerateProperties(
+		tableData: Table["data"],
+		properties: Property[]
+	): Table["data"] {
+		this.getPropertiesForGenerate(properties).forEach((genProperty) => {
+			if (!genProperty.generate) return;
+			const [property1, property2] = genProperty.generate;
+			for (let i = 0; i < tableData[property1].length; i++) {
+				const arg1 = tableData[property1][i] as number;
+				const arg2 =
+					fromHhMmSsToSeconds(tableData[property2][i] as string) /
+					3600;
+				const result = arg1 / arg2;
+				tableData[genProperty.name][i] = isNaN(result)
+					? ""
+					: result.toFixed(2);
+			}
+		});
+		return tableData;
+	}
+
+	private getPropertiesForGenerate(properties: Property[]): Property[] {
+		return properties.filter(
+			(property) => !!property.generate && property.generate.length === 2
+		);
+	}
+
+	private addAggregationToTable(table: Table, properties: Property[]): Table {
 		properties.forEach((property) => {
-			const arrayWithoutEmpty = data[property.name].filter(
+			const arrayWithoutEmpty = table.data[property.name].filter(
 				(item) => !!item
 			);
 			if (this.isArrayNumber(arrayWithoutEmpty)) {
@@ -145,7 +224,7 @@ export class Review {
 					arrayWithoutEmpty,
 					property.aggregation
 				);
-				data[property.name].push(aggregationValue);
+				table.data[property.name].push(aggregationValue);
 				return;
 			}
 			if (this.isArrayTime(arrayWithoutEmpty)) {
@@ -153,54 +232,42 @@ export class Review {
 					arrayWithoutEmpty.map(fromHhMmSsToSeconds),
 					property.aggregation
 				);
-				data[property.name].push(fromSecondsToHhMmSs(aggregationValue));
+				table.data[property.name].push(
+					fromSecondsToHhMmSs(aggregationValue)
+				);
 				return;
 			}
 		});
 
-		generateProperties.forEach((genProperty) => {
-			const [property1, property2] = genProperty.generate as [
-				string,
-				string
-			];
+		const newTableData = this.addGenerateProperties(table.data, properties);
 
-			const dataLength = data[property1].length;
-			const lastArg1 = data[property1][dataLength - 1] as number;
-			const lastArg2 =
-				fromHhMmSsToSeconds(data[property2][dataLength - 1] as string) /
-				3600;
-			const result = lastArg1 / lastArg2;
-			data[genProperty.name][dataLength - 1] = isNaN(result)
-				? ""
-				: result.toFixed(2);
-		});
-
-		headers.push("Итого");
-		console.log({ data });
-		return {
-			headers,
-			data,
-		};
+		table.headers.push("Итого");
+		table.data = newTableData;
+		return table;
 	}
 
-	private isTime(item: unknown): item is string {
+	private isTime(item: YamlValue): item is string {
 		if (typeof item !== "string") return false;
 		return !!item.match(/(\d+):(\d\d):(\d\d)/);
 	}
 
-	private isNumber(item: unknown): item is number {
+	private isNumber(item: YamlValue): item is number {
 		return typeof item === "number";
 	}
 
-	private isBoolean(item: unknown): item is boolean {
+	private isBoolean(item: YamlValue): item is boolean {
 		return typeof item === "boolean";
 	}
 
-	private isArrayTime(arr: unknown[]): arr is string[] {
+	private isString(item: unknown): item is string {
+		return typeof item === "string";
+	}
+
+	private isArrayTime(arr: YamlValue[]): arr is string[] {
 		return arr.every((item) => this.isTime(item));
 	}
 
-	private isArrayNumber(arr: unknown[]): arr is number[] {
+	private isArrayNumber(arr: YamlValue[]): arr is number[] {
 		return arr.every((item) => this.isNumber(item) || this.isBoolean(item));
 	}
 
@@ -212,41 +279,21 @@ export class Review {
 		return file.basename.match(/^\d\d\d\d-\d\d-\d\d$/) !== null;
 	}
 
-	private getCurrentWeekFiles(currentWeekNumber: number): TFile[] {
+	private getCurrentWeekFiles(currentDate: Date): TFile[] {
 		return this.files.filter(
-			(file) => new Date(file.basename).getWeek() === currentWeekNumber
+			(file) =>
+				new Date(file.basename).getWeek() === currentDate.getWeek()
 		);
 	}
+
+	private getCurrentMonthWeekReviewFiles(date: Date): TFile[] {
+		return this.files
+			.filter(
+				(file) => new Date(file.basename).getMonth() === date.getMonth()
+			)
+			.filter((file) => new Date(file.basename).getDay() === 0);
+	}
 }
-
-// function isTime(item: any): item is string {
-// 	if (typeof item === "number") return false;
-// 	const pattern = /(\d\d):(\d\d):(\d\d)/;
-// 	return !!item.match(pattern);
-// }
-
-// function isTimeArray(arr: any[]): arr is string[] {
-// 	return arr.every((item) => !!isTime(item));
-// }
-// function fromSecondsToHhMmSs(allSeconds: number): string {
-// 	const hours = Math.floor(allSeconds / 3600);
-// 	const secondsMinusHours = allSeconds - hours * 3600;
-// 	const minutes = Math.floor(secondsMinusHours / 60);
-// 	const seconds = secondsMinusHours - minutes * 60;
-// 	const result = `${hours.toString().padStart(2, "0")}:${minutes
-// 		.toString()
-// 		.padStart(2, "0")}:${seconds.toString().padStart(2, "0")}`;
-// 	return result;
-// }
-
-// function fromHhMmSsToSeconds(time: string): number {
-// 	if (!time) return 0;
-// 	const parsedHoursMinutesSeconds = time.match(/(\d\d):(\d\d):(\d\d)/);
-// 	if (!parsedHoursMinutesSeconds) return 0;
-// 	// eslint-disable-next-line @typescript-eslint/no-unused-vars
-// 	const [_, hours, minutes, seconds] = parsedHoursMinutesSeconds;
-// 	return parseInt(hours) * 3600 + parseInt(minutes) * 60 + parseInt(seconds);
-// }
 
 function fromSecondsToHhMmSs(allSeconds: number): string {
 	const hours = Math.floor(allSeconds / 3600);
