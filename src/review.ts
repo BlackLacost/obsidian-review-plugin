@@ -31,9 +31,9 @@ export class Review {
 			.map((file) => this.getDayDataFromFile(file))
 			// TODO: New Date.prototype.getDay
 			.sort((curr, next) => {
-				if (curr.date.getWeek() === 0) return 1;
-				if (next.date.getWeek() === 0) return -1;
-				return curr.date.getWeek() - next.date.getWeek();
+				if (curr.date.getDay() === 0) return 1;
+				if (next.date.getDay() === 0) return -1;
+				return curr.date.getDay() - next.date.getDay();
 			});
 
 		let table: Table | undefined = undefined;
