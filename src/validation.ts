@@ -20,6 +20,10 @@ export class Validation {
 		return typeof item === "boolean";
 	}
 
+	static isDate(item: unknown): item is Date {
+		return item instanceof Date;
+	}
+
 	static isArrayTime(arr: YamlValue[]): arr is string[] {
 		return arr.every((item) => this.isTime(item));
 	}
@@ -28,8 +32,22 @@ export class Validation {
 		return arr.every((item) => this.isNumber(item));
 	}
 
+	static isArrayString(arr: unknown[] | YamlValue): arr is string[] {
+		if (!Array.isArray(arr)) return false;
+		return arr.every((item) => this.isString(item));
+	}
+
 	static isArrayBoolean(arr: YamlValue[]): arr is number[] {
 		return arr.every((item) => this.isBoolean(item));
+	}
+
+	static isArrayTupleDateAndString(
+		arr: [unknown, unknown][]
+	): arr is [Date, string][] {
+		return arr.every(([date, title]) => [
+			this.isDate(date),
+			this.isString(title),
+		]);
 	}
 
 	static areAllFilesDailyNotes(files: TFile[]): boolean {

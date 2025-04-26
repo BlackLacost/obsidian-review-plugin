@@ -65,7 +65,7 @@ export class Review {
 		list?: List;
 	} {
 		const allSundaysInTargetMonth = targetDate.getAllSundaysInMonth();
-		const weekReviewData = allSundaysInTargetMonth.map((reviewDate) => {
+		const weekReviewsData = allSundaysInTargetMonth.map((reviewDate) => {
 			const { weekDate, table, list } = this.week(reviewDate);
 			return {
 				weekNumber: weekDate.getWeek(),
@@ -76,21 +76,24 @@ export class Review {
 
 		let monthTable: Table | undefined = undefined;
 		if (this.yamlData.table) {
-			monthTable = this.createMonthTable(weekReviewData);
-			console.log({ monthTable });
+			monthTable = this.createMonthTable(weekReviewsData);
 			monthTable.addAggregationToTable(this.yamlData.table);
 		}
 
-		const listHeader = weekReviewData[0].list?.header ?? "";
-		const listData = weekReviewData
-			.map((item) => item.list?.data)
-			.flatMap((item) => item)
-			.filter(Validation.isString);
+		let monthList: List | undefined = undefined;
+		if (this.yamlData.list) {
+			const listHeader = weekReviewsData[0].list?.header ?? "";
+			const listData = weekReviewsData
+				.map((item) => item.list?.data)
+				.flatMap((item) => item)
+				.filter((item) => !!item);
+			monthList = new List(listHeader, listData);
+		}
 
 		return {
 			monthDate: targetDate,
 			table: monthTable,
-			list: new List(listHeader, listData),
+			list: monthList,
 		};
 	}
 

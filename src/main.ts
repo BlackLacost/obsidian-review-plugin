@@ -233,7 +233,7 @@ export default class ReviewPlugin extends Plugin {
 		}
 	) {
 		const tableUi = table ? table.render() : "";
-		const listUi = list && list.data.length > 0 ? list.render() : "";
+		const listUi = list && list.data.length > 0 ? list.render("month") : "";
 		el.innerHTML = `
 					<h2>Month Review №${monthDate.getMonth() + 1}</h2>
 
