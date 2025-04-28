@@ -41,15 +41,6 @@ export class Validation {
 		return arr.every((item) => this.isBoolean(item));
 	}
 
-	static isArrayTupleDateAndString(
-		arr: [unknown, unknown][]
-	): arr is [Date, string][] {
-		return arr.every(([date, title]) => [
-			this.isDate(date),
-			this.isString(title),
-		]);
-	}
-
 	static areAllFilesDailyNotes(files: TFile[]): boolean {
 		return files.every((file) => this.isFileDailyNotes(file));
 	}

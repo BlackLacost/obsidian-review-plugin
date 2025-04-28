@@ -21,12 +21,11 @@ export class Review {
 		this.files = files;
 	}
 
-	week(targetDate: Date): {
-		weekDate: Date;
+	week(weekDate: Date): {
 		table?: Table;
 		list?: List;
 	} {
-		const weekFiles = this.getCurrentWeekFiles(targetDate);
+		const weekFiles = this.getCurrentWeekFiles(weekDate);
 		const weekDaysData = weekFiles
 			.map((file) => this.getDayDataFromFile(file))
 			// TODO: New Date.prototype.getDay
@@ -52,21 +51,16 @@ export class Review {
 			);
 		}
 
-		return {
-			weekDate: targetDate,
-			table,
-			list,
-		};
+		return { table, list };
 	}
 
-	month(targetDate: Date): {
-		monthDate: Date;
+	month(monthDate: Date): {
 		table?: Table;
 		list?: List;
 	} {
-		const allSundaysInTargetMonth = targetDate.getAllSundaysInMonth();
-		const weekReviewsData = allSundaysInTargetMonth.map((reviewDate) => {
-			const { weekDate, table, list } = this.week(reviewDate);
+		const allSundaysInTargetMonth = monthDate.getAllSundaysInMonth();
+		const weekReviewsData = allSundaysInTargetMonth.map((weekDate) => {
+			const { table, list } = this.week(weekDate);
 			return {
 				weekNumber: weekDate.getWeek(),
 				weekReviewTable: table,
@@ -85,16 +79,11 @@ export class Review {
 			const listHeader = weekReviewsData[0].list?.header ?? "";
 			const listData = weekReviewsData
 				.map((item) => item.list?.data)
-				.flatMap((item) => item)
-				.filter((item) => !!item);
+				.flatMap((item) => item ?? []);
 			monthList = new List(listHeader, listData);
 		}
 
-		return {
-			monthDate: targetDate,
-			table: monthTable,
-			list: monthList,
-		};
+		return { table: monthTable, list: monthList };
 	}
 
 	private createMonthTable(

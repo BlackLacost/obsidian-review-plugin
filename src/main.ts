@@ -144,10 +144,11 @@ export default class ReviewPlugin extends Plugin {
 						this.getDayDataFromFile.bind(this)
 					);
 
-					const currentDayData = this.getDayDataFromFile(
+					const weekDate = this.getDayDataFromFile(
 						this.getActiveFile()
-					);
-					this.renderWeekHTML(el, review.week(currentDayData.date));
+					).date;
+					const { list, table } = review.week(weekDate);
+					this.renderWeekHTML(el, { weekDate, list, table });
 				} catch (e) {
 					if (e instanceof Error) {
 						el.innerHTML = `<strong style="color: red;">${e.message}</strong>`;
@@ -161,16 +162,17 @@ export default class ReviewPlugin extends Plugin {
 			"month-review",
 			async (source, el, ctx) => {
 				try {
-					const currentDayData = this.getDayDataFromFile(
-						this.getActiveFile()
-					);
 					const review = new Review(
 						this.getDailyFilesFromDailyFolder(),
 						this.yaml.parse(source),
 						this.getDayDataFromFile.bind(this)
 					);
 
-					this.renderMonthHTML(el, review.month(currentDayData.date));
+					const monthDate = this.getDayDataFromFile(
+						this.getActiveFile()
+					).date;
+					const { list, table } = review.month(monthDate);
+					this.renderMonthHTML(el, { monthDate, list, table });
 				} catch (e) {
 					if (e instanceof Error) {
 						el.innerHTML = `<strong style="color: red;">${e.message}</strong>`;
