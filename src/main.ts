@@ -1,12 +1,5 @@
-import {
-	App,
-	MarkdownView,
-	Plugin,
-	PluginSettingTab,
-	Setting,
-	TFile,
-} from "obsidian";
-import { RenderCodeError } from "./error";
+import { App, Plugin, PluginSettingTab, Setting, TFile } from "obsidian";
+import { MainError, RenderCodeError } from "./error";
 import { FrontMatter } from "./frontmatterParser";
 import { List } from "./list";
 import { Review } from "./review";
@@ -268,15 +261,12 @@ export default class ReviewPlugin extends Plugin {
 	}
 
 	private getActiveFile(): TFile {
-		const activeView = this.app.workspace.getActiveViewOfType(MarkdownView);
+		const currentFile = this.app.workspace.getActiveFile();
 
-		if (!activeView) {
-			throw new RenderCodeError("Active View not found");
+		if (!currentFile) {
+			throw new MainError("Active file not found");
 		}
-		if (!activeView.file) {
-			throw new RenderCodeError("Active Found not found");
-		}
-		return activeView.file;
+		return currentFile;
 	}
 }
 

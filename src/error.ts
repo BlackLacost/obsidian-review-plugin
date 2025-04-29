@@ -27,3 +27,9 @@ export class PropertyError extends Error {
 		super("Property: " + message);
 	}
 }
+
+export class MainError extends Error {
+	constructor(message: string) {
+		super("Main: " + message);
+	}
+}
