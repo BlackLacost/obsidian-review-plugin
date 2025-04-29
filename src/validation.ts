@@ -1,5 +1,4 @@
 import { TFile } from "obsidian";
-import { YamlValue } from "./main";
 import { Table } from "./table";
 
 export class Validation {
@@ -12,11 +11,11 @@ export class Validation {
 		return !!item.match(/(\d+):(\d\d):(\d\d)/);
 	}
 
-	static isNumber(item: YamlValue): item is number {
+	static isNumber(item: unknown): item is number {
 		return typeof item === "number";
 	}
 
-	static isBoolean(item: YamlValue): item is boolean {
+	static isBoolean(item: unknown): item is boolean {
 		return typeof item === "boolean";
 	}
 
@@ -24,20 +23,20 @@ export class Validation {
 		return item instanceof Date;
 	}
 
-	static isArrayTime(arr: YamlValue[]): arr is string[] {
+	static isArrayTime(arr: unknown[]): arr is string[] {
 		return arr.every((item) => this.isTime(item));
 	}
 
-	static isArrayNumber(arr: YamlValue[]): arr is number[] {
+	static isArrayNumber(arr: unknown[]): arr is number[] {
 		return arr.every((item) => this.isNumber(item));
 	}
 
-	static isArrayString(arr: unknown[] | YamlValue): arr is string[] {
+	static isArrayString(arr: unknown): arr is string[] {
 		if (!Array.isArray(arr)) return false;
 		return arr.every((item) => this.isString(item));
 	}
 
-	static isArrayBoolean(arr: YamlValue[]): arr is number[] {
+	static isArrayBoolean(arr: unknown[]): arr is boolean[] {
 		return arr.every((item) => this.isBoolean(item));
 	}
 

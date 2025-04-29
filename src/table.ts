@@ -1,5 +1,6 @@
 import { Aggregation } from "./aggregation";
-import { DayData, YamlValue } from "./main";
+import { YamlValue } from "./frontmatterParser";
+import { DayData } from "./main";
 import { Validation } from "./validation";
 import { Property } from "./yamlParser";
 
@@ -55,7 +56,7 @@ export class Table {
 				Validation.isArrayBoolean(arrayWithoutEmpty)
 			) {
 				const aggregationValue = this.aggregation.call(
-					arrayWithoutEmpty,
+					arrayWithoutEmpty.map(Number),
 					property.aggregation
 				);
 				this.data[property.name].push(aggregationValue);

@@ -7,6 +7,7 @@ import {
 	TFile,
 } from "obsidian";
 import { RenderCodeError } from "./error";
+import { FrontMatter } from "./frontmatterParser";
 import { List } from "./list";
 import { Review } from "./review";
 import { Table } from "./table";
@@ -16,15 +17,9 @@ interface ReviewPluginSettings {
 	dailyFolder: string;
 }
 
-type YamlScalar = string | number | boolean | null;
-type YamlArray = YamlValue[];
-type YamlObject = { [key: string]: YamlValue };
-
-export type YamlValue = YamlScalar | YamlArray | YamlObject;
-
 export interface DayData {
 	date: Date;
-	properties: Record<string, YamlValue>;
+	properties: FrontMatter;
 }
 
 const DEFAULT_SETTINGS: ReviewPluginSettings = {
