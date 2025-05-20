@@ -3,6 +3,9 @@
 	"version": "1.0.0",
 	"description": "This is a sample plugin for Obsidian (https://obsidian.md)",
 	"main": "main.js",
+	"engines": {
+		"node": "22"
+	},
 	"scripts": {
 		"dev": "node esbuild.config.mjs",
 		"build": "tsc -noEmit -skipLibCheck && node esbuild.config.mjs production",
@@ -24,6 +27,7 @@
 		"vitest": "^3.1.2"
 	},
 	"dependencies": {
+		"lts": "^2.0.0",
 		"yaml": "^2.7.1",
 		"zod": "^3.24.3"
 	}
